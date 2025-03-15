@@ -21,7 +21,7 @@ For apt-based systems (Debian/Ubuntu):
 
 For dnf/yum-based systems (Fedora/RHEL/CentOS):
   pkgs add-repo url
-  Uses 'dnf config-manager --add-repo url' or 'yum-config-manager --add-repo url'
+  Creates a file in /etc/yum.repos.d/ directory
 
 For Alpine Linux:
   pkgs add-repo name url
@@ -29,8 +29,11 @@ For Alpine Linux:
 	Example: `  # Add a repository for apt-based systems
   pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
 
-  # Add a repository for dnf/yum-based systems
+  # Add a repository for dnf/yum-based systems (using a .repo file)
   pkgs add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+  
+  # Add a repository for dnf/yum-based systems (using a URL)
+  pkgs add-repo https://packages.example.com/rhel/8/x86_64/
 
   # Add a repository for Alpine Linux
   pkgs add-repo edge-testing https://dl-cdn.alpinelinux.org/alpine/edge/testing`,
