@@ -4,12 +4,37 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 // Version will be set during build using ldflags
 var version = "dev"
+
+// Global flags
+var (
+	// yesFlag is used for non-interactive mode, automatically answering "yes" to prompts
+	yesFlag bool
+)
+
+// IsYesMode checks if we're in non-interactive mode (yes flag or environment variable)
+func IsYesMode() bool {
+	// Check if the yes flag was set
+	if yesFlag {
+		return true
+	}
+
+	// Check for environment variable
+	envVar := os.Getenv("PKGS_YES")
+	if envVar != "" {
+		// Check for truthy values
+		envVar = strings.ToLower(envVar)
+		return envVar == "true" || envVar == "yes" || envVar == "1" || envVar == "y"
+	}
+
+	return false
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -37,6 +62,9 @@ func init() {
 	// Add version flag
 	rootCmd.Flags().BoolP("version", "v", false, "Print version information")
 	rootCmd.Flags().BoolP("help", "h", false, "Help for pkgs")
+
+	// Add global yes flag for non-interactive mode
+	rootCmd.PersistentFlags().BoolVarP(&yesFlag, "yes", "y", false, "Automatic yes to prompts; assume 'yes' as answer to all prompts and run non-interactively")
 
 	// Override the version flag function
 	rootCmd.SetVersionTemplate(fmt.Sprintf("pkgs %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH))

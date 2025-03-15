@@ -139,7 +139,51 @@ pkgs install --help
 ```bash
 # Show version information
 pkgs --version
+
+# Run commands non-interactively (useful for CI/CD and automation)
+pkgs --yes install nginx
+pkgs -y update
 ```
+
+### Non-Interactive Mode
+
+For CI/CD pipelines and automation scripts, you can use the `--yes` or `-y` flag to run commands non-interactively:
+
+```bash
+# Install packages without prompting
+pkgs -y install nginx
+
+# Update and upgrade without prompting
+pkgs -y update && pkgs -y upgrade
+
+# Remove packages without prompting
+pkgs -y remove nginx
+```
+
+This flag automatically adds the appropriate non-interactive flag to the underlying package manager:
+- `-y` for apt, dnf, and yum
+- `--noconfirm` for pacman
+- No additional flag for brew and apk (as they're already non-interactive by default)
+
+Alternatively, you can set the `PKGS_YES` environment variable to achieve the same effect:
+
+```bash
+# Set the environment variable for the current session
+export PKGS_YES=true
+
+# Now all commands will run in non-interactive mode
+pkgs install nginx
+pkgs update
+pkgs remove nginx
+
+# You can also set it for a single command
+PKGS_YES=1 pkgs install nginx
+```
+
+The `PKGS_YES` environment variable accepts the following values (case-insensitive):
+- `true`, `yes`, `1`, `y`: Enable non-interactive mode
+- Any other value or unset: Use the default interactive mode
+
 
 ## Package Manager Specifics
 

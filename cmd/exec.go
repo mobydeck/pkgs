@@ -29,10 +29,32 @@ func ExecuteCommand(pm *PackageManager, command string, args []string) error {
 	fullCmd := append([]string{}, cmdArgs...)
 	fullCmd = append(fullCmd, args...)
 
+	// Add yes flag for non-interactive mode if needed
+	if IsYesMode() {
+		switch pm.Name {
+		case "apt":
+			// For apt, use -y
+			fullCmd = append([]string{"-y"}, fullCmd...)
+		case "dnf", "yum":
+			// For dnf/yum, use -y
+			fullCmd = append([]string{"-y"}, fullCmd...)
+		case "pacman":
+			// For pacman, use --noconfirm
+			fullCmd = append([]string{"--noconfirm"}, fullCmd...)
+		case "apk":
+			// For apk, no additional flag is needed as it's non-interactive by default
+		case "brew":
+			// For brew, no additional flag is needed as it's non-interactive by default
+		}
+	}
+
 	// Special handling for pacman autoremove which uses shell expansion
 	if pm.Name == "pacman" && command == "autoremove" {
 		// For pacman, we need to run a shell script for autoremove
 		script := "pacman -Rns $(pacman -Qdtq) 2>/dev/null || echo 'No orphaned packages to remove'"
+		if IsYesMode() {
+			script = "pacman --noconfirm -Rns $(pacman -Qdtq) 2>/dev/null || echo 'No orphaned packages to remove'"
+		}
 		cmd := exec.Command("sh", "-c", script)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -50,19 +72,22 @@ func ExecuteCommand(pm *PackageManager, command string, args []string) error {
 		cmd.Stdin = os.Stdin
 		err := cmd.Run()
 
+		// Also run cleanup to remove old versions
+		fmt.Println("Cleaning up old versions of formulae...")
+		cleanupCmd := exec.Command("brew", "cleanup")
+		cleanupCmd.Stdout = os.Stdout
+		cleanupCmd.Stderr = os.Stderr
+		cleanupCmd.Stdin = os.Stdin
+		cleanupErr := cleanupCmd.Run()
+
+		// Combine errors if both exist
+		if err != nil && cleanupErr != nil {
+			return fmt.Errorf("autoremove error: %v; cleanup error: %v", err, cleanupErr)
+		}
 		if err != nil {
 			return err
 		}
-
-		// Also run cleanup to remove old versions
-		fmt.Println("Cleaning up old versions of formulae...")
-		cmd = exec.Command("brew", "cleanup")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		err = cmd.Run()
-
-		return err
+		return cleanupErr
 	}
 
 	// Print the command being executed
@@ -112,6 +137,23 @@ func RunWithSudo(pm *PackageManager, command string, args []string) error {
 
 			// Prepare the command to run with sudo
 			fullCmd := append([]string{pm.Bin}, pm.Commands[command]...)
+
+			// Add yes flag for non-interactive mode if needed
+			if IsYesMode() {
+				switch pm.Name {
+				case "apt":
+					// For apt, use -y
+					fullCmd = append(fullCmd, "-y")
+				case "dnf", "yum":
+					// For dnf/yum, use -y
+					fullCmd = append(fullCmd, "-y")
+				case "pacman":
+					// For pacman, use --noconfirm
+					fullCmd = append(fullCmd, "--noconfirm")
+				}
+			}
+
+			// Add the remaining arguments
 			fullCmd = append(fullCmd, args...)
 
 			fmt.Printf("Executing: sudo %s %s\n", pm.Bin, strings.Join(fullCmd[1:], " "))
