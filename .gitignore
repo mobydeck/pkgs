@@ -1,0 +1,9 @@
+.vscode/
+.idea/
+dist/
+
+.DS_*
+.envrc
+coverage.*
+
+pkgs
