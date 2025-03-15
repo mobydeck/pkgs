@@ -41,10 +41,11 @@ var rootCmd = &cobra.Command{
 	Use:   "pkgs",
 	Short: "A unified package manager interface",
 	Long: `pkgs is a CLI tool that provides a unified interface for package management
-across different Linux distributions including RedHat, Ubuntu, Debian, and Alpine.
+across different Linux distributions including RedHat, Ubuntu, Debian, Alpine, Arch
+and macOS.
 
-It wraps around native package managers like yum, dnf, apt, and apk, allowing you
-to use the same commands regardless of the underlying system.`,
+It wraps around native package managers like yum, dnf, apt, apk, pacman and brew,
+allowing you to use the same commands regardless of the underlying system.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			cmd.Help()

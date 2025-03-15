@@ -9,7 +9,7 @@ import (
 // upgradeCmd represents the upgrade command
 var upgradeCmd = &cobra.Command{
 	Use:     "upgrade",
-	Aliases: []string{"ug"},
+	Aliases: []string{"ug", "u"},
 	Short:   "Upgrade installed packages",
 	Long:    `Upgrade all installed packages to their latest versions using the native package manager.`,
 	Example: `  pkgs upgrade`,

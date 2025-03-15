@@ -81,6 +81,10 @@ just package
 pkgs install nginx
 pkgs i vim git curl
 
+# Reinstall packages
+pkgs reinstall nginx
+pkgs ri vim git curl
+
 # Remove packages
 pkgs remove nginx
 pkgs rm vim git curl
@@ -106,6 +110,12 @@ pkgs autoremove
 
 # Clean package cache
 pkgs clean
+
+# Add repository keys
+pkgs add-key nodesource https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+
+# Add repositories
+pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
 
 # Show which package manager is being used
 pkgs which
@@ -184,6 +194,43 @@ The `PKGS_YES` environment variable accepts the following values (case-insensiti
 - `true`, `yes`, `1`, `y`: Enable non-interactive mode
 - Any other value or unset: Use the default interactive mode
 
+### Repository Management
+
+`pkgs` provides commands to manage package repositories and their signing keys:
+
+```bash
+# Add a repository key
+pkgs add-key [name] url
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs add-key nodesource https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+
+# For Alpine Linux
+pkgs add-key alpine-key https://alpine-keys.example.com/key.rsa.pub
+# Or without specifying a name (will use the filename from the URL)
+pkgs add-key https://alpine-keys.example.com/key.rsa.pub
+```
+
+```bash
+# Add a repository
+pkgs add-repo [name] url
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
+
+# For dnf/yum-based systems (Fedora/RHEL/CentOS)
+pkgs add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+
+# For Alpine Linux
+pkgs add-repo edge-testing https://dl-cdn.alpinelinux.org/alpine/edge/testing
+
+# For Homebrew
+pkgs add-repo homebrew/cask-fonts
+```
+
+These commands handle the package manager-specific details for you, making it easier to manage repositories across different systems.
 
 ## Package Manager Specifics
 
@@ -194,15 +241,34 @@ On macOS systems, `pkgs` automatically detects and uses Homebrew. Some key diffe
 - Commands never use sudo (as recommended by Homebrew)
 - `autoremove` runs both `brew autoremove` to remove unused dependencies and `brew cleanup` to remove old versions
 - `remove` uses `brew uninstall` instead of remove/purge
+- `reinstall` uses `brew reinstall` to reinstall packages
+- `add-repo` uses `brew tap` to add new taps
+- `add-key` is not applicable for Homebrew
 
 ### Linux Package Managers
 
 Each Linux package manager has its own specific implementation:
 
-- `apt` (Debian/Ubuntu): Uses `--purge` for thorough removal
-- `dnf`/`yum` (RedHat): Uses `check-update` for the update command
-- `apk` (Alpine): Uses `add` and `del` instead of install/remove
-- `pacman` (Arch): Uses special flags like `-S`, `-Rns`, etc.
+- `apt` (Debian/Ubuntu): 
+  - Uses `--purge` for thorough removal
+  - Uses `--reinstall` flag for reinstalling packages
+  - `add-key` saves keys to `/etc/apt/keyrings/name.asc`
+  - `add-repo` creates files in `/etc/apt/sources.list.d/name.list`
+- `dnf`/`yum` (RedHat): 
+  - Uses `check-update` for the update command
+  - Has a dedicated `reinstall` command
+  - `add-repo` creates files in `/etc/yum.repos.d/` directory
+  - `add-key` provides guidance for using `rpm --import`
+- `apk` (Alpine): 
+  - Uses `add` and `del` instead of install/remove
+  - Uses `add --force-overwrite` for reinstalling
+  - `add-key` adds keys to `/etc/apk/keys/`
+  - `add-repo` adds repositories to `/etc/apk/repositories`
+- `pacman` (Arch): 
+  - Uses special flags like `-S`, `-Rns`, etc.
+  - Uses `-S --needed` for reinstalling packages
+  - `add-key` provides guidance for using `pacman-key --add`
+  - `add-repo` provides guidance for manually editing `/etc/pacman.conf`
 
 #### Privilege Elevation on Linux
 
@@ -214,11 +280,14 @@ On Linux systems, package management operations typically require root privilege
 
 Commands that require privilege elevation:
 - install
+- reinstall
 - remove
 - update
 - upgrade
 - autoremove
 - clean
+- add-key
+- add-repo
 
 ## License
 

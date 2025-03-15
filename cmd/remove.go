@@ -9,7 +9,7 @@ import (
 // removeCmd represents the remove command
 var removeCmd = &cobra.Command{
 	Use:     "remove [packages...]",
-	Aliases: []string{"r", "rm", "uninstall"},
+	Aliases: []string{"r", "rm", "uninstall", "del"},
 	Short:   "Remove packages",
 	Long:    `Remove one or more packages from the system using the native package manager.`,
 	Example: `  pkgs remove nginx

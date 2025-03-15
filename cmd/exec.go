@@ -106,11 +106,14 @@ func RequireSudo(command string) bool {
 	// Commands that typically require sudo/root privileges on Linux systems
 	sudoCommands := map[string]bool{
 		"install":    true,
+		"reinstall":  true,
 		"remove":     true,
 		"update":     true, // Added update which often requires root
 		"upgrade":    true,
 		"autoremove": true,
 		"clean":      true,
+		"add-key":    true, // Adding repository keys requires root
+		"add-repo":   true, // Adding repositories requires root
 	}
 
 	return sudoCommands[command]
@@ -168,4 +171,36 @@ func RunWithSudo(pm *PackageManager, command string, args []string) error {
 
 	// Run without sudo
 	return ExecuteCommand(pm, command, args)
+}
+
+// ExecuteShellCommand runs a shell command directly
+func ExecuteShellCommand(command string, requireSudo bool) error {
+	var cmd *exec.Cmd
+
+	if requireSudo && IsLinux() && os.Geteuid() != 0 {
+		fmt.Printf("This command requires root privileges. Executing with sudo...\n")
+
+		// Check if sudo is available
+		_, err := exec.LookPath("sudo")
+		if err != nil {
+			return fmt.Errorf("this command requires root privileges, but sudo is not available: %v", err)
+		}
+
+		// Add -S flag to sudo if in non-interactive mode
+		sudoCmd := "sudo"
+		if IsYesMode() {
+			sudoCmd = "sudo -S"
+		}
+
+		fmt.Printf("Executing: %s %s\n", sudoCmd, command)
+		cmd = exec.Command("sh", "-c", sudoCmd+" "+command)
+	} else {
+		fmt.Printf("Executing: %s\n", command)
+		cmd = exec.Command("sh", "-c", command)
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }

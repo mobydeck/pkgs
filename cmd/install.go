@@ -9,7 +9,7 @@ import (
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:     "install [packages...]",
-	Aliases: []string{"i", "in"},
+	Aliases: []string{"i", "in", "add"},
 	Short:   "Install packages",
 	Long:    `Install one or more packages on the system using the native package manager.`,
 	Example: `  pkgs install nginx

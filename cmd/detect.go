@@ -22,6 +22,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "macos",
 			Commands: map[string][]string{
 				"install":    {"install"},
+				"reinstall":  {"reinstall"},
 				"remove":     {"uninstall"},
 				"update":     {"update"},
 				"upgrade":    {"upgrade"},
@@ -29,6 +30,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"info"},
 				"autoremove": {"autoremove"},
 				"clean":      {"cleanup"},
+				"add-repo":   {"tap"},
+				"add-key":    {""},
 			},
 		}
 	}
@@ -41,6 +44,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "debian",
 			Commands: map[string][]string{
 				"install":    {"install"},
+				"reinstall":  {"install", "--reinstall"},
 				"remove":     {"remove", "--purge"},
 				"update":     {"update"},
 				"upgrade":    {"upgrade"},
@@ -48,6 +52,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"show"},
 				"autoremove": {"autoremove", "--purge"},
 				"clean":      {"clean"},
+				"add-repo":   {""},
+				"add-key":    {""},
 			},
 		}
 	}
@@ -60,6 +66,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "redhat",
 			Commands: map[string][]string{
 				"install":    {"install"},
+				"reinstall":  {"reinstall"},
 				"remove":     {"remove"},
 				"update":     {"check-update"},
 				"upgrade":    {"upgrade"},
@@ -67,6 +74,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"info"},
 				"autoremove": {"autoremove"},
 				"clean":      {"clean", "all"},
+				"add-repo":   {""},
+				"add-key":    {""},
 			},
 		}
 	}
@@ -79,6 +88,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "redhat",
 			Commands: map[string][]string{
 				"install":    {"install"},
+				"reinstall":  {"reinstall"},
 				"remove":     {"remove"},
 				"update":     {"check-update"},
 				"upgrade":    {"upgrade"},
@@ -86,6 +96,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"info"},
 				"autoremove": {"autoremove"},
 				"clean":      {"clean", "all"},
+				"add-repo":   {""},
+				"add-key":    {""},
 			},
 		}
 	}
@@ -98,6 +110,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "alpine",
 			Commands: map[string][]string{
 				"install":    {"add"},
+				"reinstall":  {"add", "--force-overwrite"},
 				"remove":     {"del"},
 				"update":     {"update"},
 				"upgrade":    {"upgrade"},
@@ -105,6 +118,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"info"},
 				"autoremove": {"autoremove"},
 				"clean":      {"cache", "clean"},
+				"add-repo":   {""},
+				"add-key":    {""},
 			},
 		}
 	}
@@ -117,6 +132,7 @@ func DetectPackageManager() *PackageManager {
 			Type: "arch",
 			Commands: map[string][]string{
 				"install":    {"-S"},
+				"reinstall":  {"-S", "--needed"},
 				"remove":     {"-Rns"},
 				"update":     {"-Sy"},
 				"upgrade":    {"-Syu"},
@@ -124,6 +140,8 @@ func DetectPackageManager() *PackageManager {
 				"info":       {"-Si"},
 				"autoremove": {"-Rns", "$(pacman -Qdtq)"},
 				"clean":      {"-Sc"},
+				"add-repo":   {""},
+				"add-key":    {""},
 			},
 		}
 	}
