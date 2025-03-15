@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -77,20 +76,22 @@ For Alpine Linux:
 
 // enableRepoApt enables a repository for apt-based systems
 func enableRepoApt(name string) error {
+	config := getRepoConfig("debian")
+
 	// Check for the repository file
-	repoPath := filepath.Join("/etc/apt/sources.list.d", name+".list")
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+	repoPath := filepath.Join(config.baseDir, name+config.fileExtension)
+	if !fileExists(repoPath) {
 		return fmt.Errorf("repository file %s does not exist", repoPath)
 	}
 
 	// Read the repository file
-	content, err := os.ReadFile(repoPath)
+	content, err := readFileContent(repoPath)
 	if err != nil {
-		return fmt.Errorf("failed to read repository file: %v", err)
+		return err
 	}
 
 	// Uncomment all commented lines that are not comments themselves
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(content, "\n")
 	modified := false
 	for i, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
@@ -107,8 +108,8 @@ func enableRepoApt(name string) error {
 	}
 
 	// Write the modified content back
-	if err := os.WriteFile(repoPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
-		return fmt.Errorf("failed to write repository file: %v", err)
+	if err := writeFileContent(repoPath, strings.Join(lines, "\n"), 0644); err != nil {
+		return err
 	}
 
 	fmt.Printf("Successfully enabled repository in %s\n", repoPath)
@@ -118,9 +119,10 @@ func enableRepoApt(name string) error {
 
 // enableRepoDnfYum enables a repository for dnf/yum-based systems
 func enableRepoDnfYum(name string) error {
+	config := getRepoConfig("redhat")
+
 	// Find the repository file
-	repoDir := "/etc/yum.repos.d"
-	repoFiles, err := filepath.Glob(filepath.Join(repoDir, "*.repo"))
+	repoFiles, err := filepath.Glob(filepath.Join(config.baseDir, "*.repo"))
 	if err != nil {
 		return fmt.Errorf("failed to list repository files: %v", err)
 	}
@@ -128,34 +130,32 @@ func enableRepoDnfYum(name string) error {
 	// Try exact match first (repository ID)
 	exactMatch := false
 	for _, repoFile := range repoFiles {
-		content, err := os.ReadFile(repoFile)
+		content, err := readFileContent(repoFile)
 		if err != nil {
-			return fmt.Errorf("failed to read repository file %s: %v", repoFile, err)
+			return err
 		}
-
-		contentStr := string(content)
 
 		// Check for exact repository ID match
 		repoIDPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(name) + `\]`)
-		if repoIDPattern.MatchString(contentStr) {
+		if repoIDPattern.MatchString(content) {
 			exactMatch = true
 
 			// Check if already enabled
-			repoSection := extractRepoSection(contentStr, name)
+			repoSection := extractRepoSection(content, name)
 			if strings.Contains(repoSection, "enabled=1") {
 				fmt.Printf("Repository %s is already enabled in %s\n", name, repoFile)
 				return nil
 			}
 
 			// Modify the file to enable the repository
-			modifiedContent := enableRepoInContent(contentStr, name)
-			if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
-				return fmt.Errorf("failed to write repository file: %v", err)
+			modifiedContent := enableRepoInContent(content, name)
+			if err := writeFileContent(repoFile, modifiedContent, 0644); err != nil {
+				return err
 			}
 
 			fmt.Printf("Successfully enabled repository %s in %s\n", name, repoFile)
 			fmt.Println("Run 'pkgs update' to update the package lists.")
-			return nil // Return here after successful enabling by exact match
+			return nil
 		}
 	}
 
@@ -163,16 +163,13 @@ func enableRepoDnfYum(name string) error {
 	if !exactMatch {
 		nameMatched := false
 		for _, repoFile := range repoFiles {
-			content, err := os.ReadFile(repoFile)
+			content, err := readFileContent(repoFile)
 			if err != nil {
-				return fmt.Errorf("failed to read repository file %s: %v", repoFile, err)
+				return err
 			}
 
-			contentStr := string(content)
-			modified := false
-
 			// Find all repository sections
-			repoSections := extractAllRepoSections(contentStr)
+			repoSections := extractAllRepoSections(content)
 			for repoID, repoSection := range repoSections {
 				// Check if this section has a name that matches
 				if strings.Contains(repoSection, "name="+name) ||
@@ -182,24 +179,19 @@ func enableRepoDnfYum(name string) error {
 					// Check if already enabled
 					if strings.Contains(repoSection, "enabled=1") {
 						fmt.Printf("Repository with name %s (ID: %s) is already enabled in %s\n", name, repoID, repoFile)
-						return nil // Return immediately if we find an already enabled matching repo
+						return nil
 					}
 
 					// Modify the file to enable the repository
-					modifiedContent := enableRepoInContent(contentStr, repoID)
-					if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
-						return fmt.Errorf("failed to write repository file: %v", err)
+					modifiedContent := enableRepoInContent(content, repoID)
+					if err := writeFileContent(repoFile, modifiedContent, 0644); err != nil {
+						return err
 					}
 
 					fmt.Printf("Successfully enabled repository with name %s (ID: %s) in %s\n", name, repoID, repoFile)
-					modified = true
-					break // Enable only the first matching repository
+					fmt.Println("Run 'pkgs update' to update the package lists.")
+					return nil
 				}
-			}
-
-			if modified {
-				fmt.Println("Run 'pkgs update' to update the package lists.")
-				return nil // Return after successfully enabling a repository
 			}
 		}
 
@@ -211,24 +203,36 @@ func enableRepoDnfYum(name string) error {
 	return nil
 }
 
-// enableRepoAlpine enables a repository for Alpine Linux
+// enableRepoAlpine enables a repository in Alpine Linux
 func enableRepoAlpine(name string) error {
-	// Read the repositories file
-	repoFile := "/etc/apk/repositories"
-	content, err := os.ReadFile(repoFile)
-	if err != nil {
-		return fmt.Errorf("failed to read repositories file: %v", err)
+	config := getRepoConfig("alpine")
+	repoFile := filepath.Join(config.baseDir, "repositories")
+
+	// Check if repositories file exists
+	if !fileExists(repoFile) {
+		return fmt.Errorf("repositories file not found: %s", repoFile)
 	}
 
-	// Look for the repository line
-	lines := strings.Split(string(content), "\n")
+	// Read the repositories file
+	content, err := readFileContent(repoFile)
+	if err != nil {
+		return err
+	}
+
+	// Check if there's a commented repository with this name
+	lines := strings.Split(content, "\n")
 	modified := false
-	for i, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmedLine, "#") && strings.Contains(trimmedLine, "/"+name) {
-			// Remove the comment marker
-			lines[i] = strings.TrimPrefix(strings.TrimPrefix(line, "# "), "#")
-			modified = true
+
+	for i := 0; i < len(lines); i++ {
+		// Look for commented repository name
+		if strings.TrimSpace(lines[i]) == fmt.Sprintf("# %s", name) && i+1 < len(lines) {
+			// Uncomment the repository URL on the next line if it's commented
+			if strings.HasPrefix(strings.TrimSpace(lines[i+1]), "#") {
+				lines[i+1] = strings.TrimPrefix(strings.TrimSpace(lines[i+1]), "#")
+				modified = true
+				// Skip the repository URL line
+				i++
+			}
 		}
 	}
 
@@ -237,30 +241,34 @@ func enableRepoAlpine(name string) error {
 	}
 
 	// Write the modified content back
-	if err := os.WriteFile(repoFile, []byte(strings.Join(lines, "\n")), 0644); err != nil {
-		return fmt.Errorf("failed to write repositories file: %v", err)
+	if err := writeFileContent(repoFile, strings.Join(lines, "\n"), 0644); err != nil {
+		return err
 	}
 
-	fmt.Printf("Successfully enabled repository %s in %s\n", name, repoFile)
+	fmt.Printf("Successfully enabled repository %s\n", name)
 	fmt.Println("Run 'pkgs update' to update the package lists.")
 	return nil
 }
 
-// enableRepoInContent modifies the content to enable a specific repository
+// Helper function to enable a repository in content
 func enableRepoInContent(content, repoID string) string {
-	// First try to replace enabled=0 with enabled=1
-	disabledPattern := regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(repoID) + `\](?:.*\n)*?.*?)enabled=0`)
-	if disabledPattern.MatchString(content) {
-		return disabledPattern.ReplaceAllString(content, "${1}enabled=1")
+	// Find the repository section
+	repoSection := extractRepoSection(content, repoID)
+	if repoSection == "" {
+		return content
 	}
 
-	// If enabled=0 not found, add enabled=1 after the repo header
-	headerPattern := regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(repoID) + `\]\n)`)
-	if headerPattern.MatchString(content) {
-		return headerPattern.ReplaceAllString(content, "${1}enabled=1\n")
+	// Check if enabled=0 exists
+	enabledPattern := regexp.MustCompile(`(?m)(^|\n)\s*enabled\s*=\s*0`)
+	if enabledPattern.MatchString(repoSection) {
+		// Replace enabled=0 with enabled=1
+		modifiedSection := enabledPattern.ReplaceAllString(repoSection, "${1}enabled=1")
+		return strings.Replace(content, repoSection, modifiedSection, 1)
 	}
 
-	return content
+	// If no enabled=0 exists, add enabled=1 after the repository header
+	repoHeaderPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(repoID) + `\].*?(\n)`)
+	return repoHeaderPattern.ReplaceAllString(content, "${0}enabled=1\n")
 }
 
 func init() {

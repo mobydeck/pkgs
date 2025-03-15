@@ -20,8 +20,9 @@ For apt-based systems (Debian/Ubuntu):
   Creates a file in /etc/apt/sources.list.d/name.list
 
 For dnf/yum-based systems (Fedora/RHEL/CentOS):
-  pkgs add-repo url
+  pkgs add-repo [name] url
   Creates a file in /etc/yum.repos.d/ directory
+  If URL ends with .repo, name is optional and the filename will be used.
 
 For Alpine Linux:
   pkgs add-repo name url
@@ -33,7 +34,7 @@ For Alpine Linux:
   pkgs add-repo https://download.docker.com/linux/fedora/docker-ce.repo
   
   # Add a repository for dnf/yum-based systems (using a URL)
-  pkgs add-repo https://packages.example.com/rhel/8/x86_64/
+  pkgs add-repo myrepo https://packages.example.com/rhel/8/x86_64/
 
   # Add a repository for Alpine Linux
   pkgs add-repo edge-testing https://dl-cdn.alpinelinux.org/alpine/edge/testing`,
@@ -44,14 +45,29 @@ For Alpine Linux:
 			return
 		}
 
-		// Check arguments
-		if len(args) != 2 {
-			fmt.Println("Error: Repository name and URL are required.")
-			fmt.Println("Usage: pkgs add-repo name url")
+		// Check arguments based on package manager type
+		var name, url string
+
+		if pm.Type == "redhat" && len(args) == 1 && strings.HasSuffix(args[0], ".repo") {
+			// For Red Hat systems with a .repo URL, name is optional
+			url = args[0]
+			// Extract name from the URL (filename without .repo extension)
+			name = filepath.Base(url)
+			name = strings.TrimSuffix(name, ".repo")
+		} else if len(args) == 2 {
+			// Normal case: name and URL provided
+			name = args[0]
+			url = args[1]
+		} else {
+			fmt.Println("Error: Invalid arguments.")
+			if pm.Type == "redhat" {
+				fmt.Println("Usage: pkgs add-repo [name] url")
+				fmt.Println("       For .repo files, name is optional.")
+			} else {
+				fmt.Println("Usage: pkgs add-repo name url")
+			}
 			return
 		}
-		name := args[0]
-		url := args[1]
 
 		// Add repository based on package manager
 		switch pm.Type {
@@ -81,116 +97,150 @@ For Alpine Linux:
 
 // addRepoApt adds a repository for apt-based systems
 func addRepoApt(name, repoLine string) error {
+	config := getRepoConfig("debian")
+
 	// Create sources.list.d directory if it doesn't exist
-	sourcesDir := "/etc/apt/sources.list.d"
-	if err := os.MkdirAll(sourcesDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", sourcesDir, err)
+	if err := ensureDirExists(config.baseDir); err != nil {
+		return err
 	}
 
-	// Create the repository file
-	repoPath := filepath.Join(sourcesDir, name+".list")
-	if err := os.WriteFile(repoPath, []byte(repoLine+"\n"), 0644); err != nil {
-		return fmt.Errorf("failed to write repository file: %v", err)
+	// Check if the repository file already exists
+	repoPath := filepath.Join(config.baseDir, name+config.fileExtension)
+	if fileExists(repoPath) {
+		// File exists, check if it contains the same repository line
+		content, err := readFileContent(repoPath)
+		if err != nil {
+			return err
+		}
+
+		if strings.Contains(content, repoLine) {
+			fmt.Printf("Repository already exists in %s\n", repoPath)
+			return nil
+		}
+
+		// Ask for confirmation before overwriting
+		if !askForConfirmation(fmt.Sprintf("Repository file %s already exists. Do you want to overwrite it?", repoPath)) {
+			return fmt.Errorf("operation cancelled by user")
+		}
 	}
 
-	fmt.Printf("Successfully added repository to %s\n", repoPath)
-	fmt.Println("Run 'pkgs update' to update the package lists.")
-	return nil
+	// Write the repository line to the file
+	return writeFileContent(repoPath, repoLine+"\n", 0644)
 }
 
 // addRepoDnfYum adds a repository for dnf/yum-based systems
 func addRepoDnfYum(name, url string) error {
-	// Check if the URL is a direct .repo file URL
+	config := getRepoConfig("redhat")
+
+	// Create yum.repos.d directory if it doesn't exist
+	if err := ensureDirExists(config.baseDir); err != nil {
+		return err
+	}
+
+	// Handle .repo URL directly
 	if strings.HasSuffix(url, ".repo") {
-		// Create yum.repos.d directory if it doesn't exist
-		repoDir := "/etc/yum.repos.d"
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %v", repoDir, err)
-		}
-
 		// Download the .repo file
-		repoPath := filepath.Join(repoDir, name+".repo")
-		fmt.Printf("Downloading repository file from %s to %s...\n", url, repoPath)
+		fmt.Printf("Downloading repository file from %s...\n", url)
 
-		if err := downloadFile(url, repoPath); err != nil {
+		// Create a temporary file to download to
+		tempFile, err := os.CreateTemp("", "repo-*.repo")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary file: %v", err)
+		}
+		defer os.Remove(tempFile.Name())
+		tempFile.Close()
+
+		// Use curl to download the file
+		if err := runCommand("curl", "-fsSL", "-o", tempFile.Name(), url); err != nil {
 			return fmt.Errorf("failed to download repository file: %v", err)
 		}
 
-		fmt.Printf("Successfully added repository to %s\n", repoPath)
-	} else {
-		// Create a .repo file with the provided URL
-		repoDir := "/etc/yum.repos.d"
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %v", repoDir, err)
+		// Read the downloaded file
+		repoContent, err := readFileContent(tempFile.Name())
+		if err != nil {
+			return err
 		}
 
-		// Create the repository file content
-		content := fmt.Sprintf("[%s]\nname=%s\nbaseurl=%s\nenabled=1\ngpgcheck=0\n", name, name, url)
+		// Destination path
+		destPath := filepath.Join(config.baseDir, name+config.fileExtension)
 
-		// Write the repository file
-		repoPath := filepath.Join(repoDir, name+".repo")
-		if err := os.WriteFile(repoPath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write repository file: %v", err)
+		// Check if file already exists
+		if fileExists(destPath) {
+			if !askForConfirmation(fmt.Sprintf("Repository file %s already exists. Do you want to overwrite it?", destPath)) {
+				return fmt.Errorf("operation cancelled by user")
+			}
 		}
 
-		fmt.Printf("Successfully added repository to %s\n", repoPath)
-		fmt.Println("Note: GPG check is disabled. To enable it, add the GPG key and edit the repo file.")
+		// Write the file
+		if err := writeFileContent(destPath, repoContent, 0644); err != nil {
+			return err
+		}
+
+		fmt.Printf("Repository file added to %s\n", destPath)
+		return nil
 	}
 
-	fmt.Println("Run 'pkgs update' to update the package lists.")
+	// Create a .repo file for a URL repository
+	repoContent := fmt.Sprintf("[%s]\nname=%s\nbaseurl=%s\nenabled=1\ngpgcheck=0\n", name, name, url)
+	repoPath := filepath.Join(config.baseDir, name+config.fileExtension)
+
+	// Check if file already exists
+	if fileExists(repoPath) {
+		if !askForConfirmation(fmt.Sprintf("Repository file %s already exists. Do you want to overwrite it?", repoPath)) {
+			return fmt.Errorf("operation cancelled by user")
+		}
+	}
+
+	// Write the repository file
+	if err := writeFileContent(repoPath, repoContent, 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Repository added to %s\n", repoPath)
 	return nil
 }
 
 // addRepoAlpine adds a repository for Alpine Linux
 func addRepoAlpine(name, url string) error {
-	// Open the repositories file
-	repoFile := "/etc/apk/repositories"
-	content, err := os.ReadFile(repoFile)
+	config := getRepoConfig("alpine")
+	repoFile := filepath.Join(config.baseDir, "repositories")
+
+	// Check if repositories file exists
+	if !fileExists(repoFile) {
+		return fmt.Errorf("repositories file not found: %s", repoFile)
+	}
+
+	// Read the repositories file
+	content, err := readFileContent(repoFile)
 	if err != nil {
-		return fmt.Errorf("failed to read repositories file: %v", err)
+		return err
 	}
 
 	// Check if the repository already exists
-	repoLine := url
-	if !strings.HasSuffix(url, "/"+name) && !strings.HasSuffix(url, "/") {
-		repoLine = url + "/" + name
-	}
-
-	if strings.Contains(string(content), repoLine) {
-		fmt.Println("Repository already exists in", repoFile)
+	if strings.Contains(content, url) {
+		fmt.Println("Repository already exists in /etc/apk/repositories")
 		return nil
 	}
 
-	// Append the repository
-	f, err := os.OpenFile(repoFile, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open repositories file: %v", err)
-	}
-	defer f.Close()
+	// Add the repository with a comment
+	repoLine := fmt.Sprintf("\n# %s\n%s\n", name, url)
+	newContent := content + repoLine
 
-	if _, err := f.WriteString("\n" + repoLine + "\n"); err != nil {
-		return fmt.Errorf("failed to write to repositories file: %v", err)
+	// Write the updated file
+	if err := writeFileContent(repoFile, newContent, 0644); err != nil {
+		return err
 	}
 
-	fmt.Printf("Successfully added repository to %s\n", repoFile)
+	fmt.Println("Repository added to /etc/apk/repositories")
 	fmt.Println("Run 'pkgs update' to update the package lists.")
 	return nil
 }
 
-// addRepoHomebrew adds a tap for Homebrew
-func addRepoHomebrew(tap string) error {
-	pm := DetectPackageManager()
-	if pm == nil || pm.Name != "brew" {
-		return fmt.Errorf("Homebrew not detected on this system")
-	}
-
-	// Execute the command
-	if err := ExecuteCommand(pm, "tap", []string{tap}); err != nil {
-		return fmt.Errorf("failed to add tap: %v", err)
-	}
-
-	fmt.Println("Successfully added tap:", tap)
-	return nil
+// addRepoHomebrew adds a tap to Homebrew
+func addRepoHomebrew(url string) error {
+	// Run brew tap command
+	fmt.Printf("Adding Homebrew tap %s...\n", url)
+	return runCommand("brew", "tap", url)
 }
 
 func init() {
