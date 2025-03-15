@@ -124,50 +124,99 @@ func disableRepoDnfYum(name string) error {
 		return fmt.Errorf("failed to list repository files: %v", err)
 	}
 
-	// Look for the repository in all .repo files
-	repoFound := false
+	// Try exact match first (repository ID)
+	exactMatch := false
 	for _, repoFile := range repoFiles {
 		content, err := os.ReadFile(repoFile)
 		if err != nil {
 			return fmt.Errorf("failed to read repository file %s: %v", repoFile, err)
 		}
 
-		// Check if the repository is in this file
-		if strings.Contains(string(content), "["+name+"]") {
-			// Modify the file to disable the repository
-			repoPattern := regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(name) + `\][^\[]*?)enabled=1`)
-			if !repoPattern.MatchString(string(content)) {
-				// If enabled=1 is not found, check if enabled=0 is already set
-				if strings.Contains(string(content), "["+name+"]\n") && strings.Contains(string(content), "enabled=0") {
-					fmt.Printf("Repository %s is already disabled in %s\n", name, repoFile)
-					return nil
-				}
-				// If enabled is not specified, add enabled=0
-				repoPattern = regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(name) + `\][^\[]*?)(\n|\z)`)
-				modifiedContent := repoPattern.ReplaceAllString(string(content), "${1}enabled=0${2}")
-				if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
-					return fmt.Errorf("failed to write repository file: %v", err)
-				}
-			} else {
-				// Replace enabled=1 with enabled=0
-				modifiedContent := repoPattern.ReplaceAllString(string(content), "${1}enabled=0")
-				if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
-					return fmt.Errorf("failed to write repository file: %v", err)
-				}
+		contentStr := string(content)
+
+		// Check for exact repository ID match
+		repoIDPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(name) + `\]`)
+		if repoIDPattern.MatchString(contentStr) {
+			exactMatch = true
+
+			// Check if already disabled
+			repoSection := extractRepoSection(contentStr, name)
+			if strings.Contains(repoSection, "enabled=0") {
+				fmt.Printf("Repository %s is already disabled in %s\n", name, repoFile)
+				return nil
 			}
-			
+
+			// Modify the file to disable the repository
+			modifiedContent := disableRepoInContent(contentStr, name)
+			if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
+				return fmt.Errorf("failed to write repository file: %v", err)
+			}
+
 			fmt.Printf("Successfully disabled repository %s in %s\n", name, repoFile)
-			repoFound = true
 			break
 		}
 	}
 
-	if !repoFound {
-		return fmt.Errorf("repository %s not found in any .repo file", name)
+	// If no exact match found, try to find by name in repo files
+	if !exactMatch {
+		nameMatched := false
+		for _, repoFile := range repoFiles {
+			content, err := os.ReadFile(repoFile)
+			if err != nil {
+				return fmt.Errorf("failed to read repository file %s: %v", repoFile, err)
+			}
+
+			contentStr := string(content)
+
+			// Find all repository sections
+			repoSections := extractAllRepoSections(contentStr)
+			for repoID, repoSection := range repoSections {
+				// Check if this section has a name that matches
+				if strings.Contains(repoSection, "name="+name) ||
+					strings.Contains(repoSection, "name = "+name) {
+					nameMatched = true
+
+					// Check if already disabled
+					if strings.Contains(repoSection, "enabled=0") {
+						fmt.Printf("Repository with name %s (ID: %s) is already disabled in %s\n", name, repoID, repoFile)
+						continue
+					}
+
+					// Modify the file to disable the repository
+					modifiedContent := disableRepoInContent(contentStr, repoID)
+					if err := os.WriteFile(repoFile, []byte(modifiedContent), 0644); err != nil {
+						return fmt.Errorf("failed to write repository file: %v", err)
+					}
+
+					fmt.Printf("Successfully disabled repository with name %s (ID: %s) in %s\n", name, repoID, repoFile)
+				}
+			}
+		}
+
+		if !nameMatched && !exactMatch {
+			return fmt.Errorf("repository %s not found in any .repo file", name)
+		}
 	}
 
 	fmt.Println("Run 'pkgs update' to update the package lists.")
 	return nil
+}
+
+// disableRepoInContent modifies the content to disable a specific repository
+func disableRepoInContent(content, repoID string) string {
+	// First try to replace enabled=1 with enabled=0
+	enabledPattern := regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(repoID) + `\](?:.*\n)*?.*?)enabled=1`)
+	if enabledPattern.MatchString(content) {
+		return enabledPattern.ReplaceAllString(content, "${1}enabled=0")
+	}
+
+	// If enabled=1 not found, add enabled=0 after the repo header
+	headerPattern := regexp.MustCompile(`(?m)(\[` + regexp.QuoteMeta(repoID) + `\]\n)`)
+	if headerPattern.MatchString(content) {
+		return headerPattern.ReplaceAllString(content, "${1}enabled=0\n")
+	}
+
+	return content
 }
 
 // disableRepoAlpine disables a repository for Alpine Linux
@@ -206,4 +255,4 @@ func disableRepoAlpine(name string) error {
 
 func init() {
 	rootCmd.AddCommand(disableRepoCmd)
-} 
+}
