@@ -101,21 +101,27 @@ func ExecuteCommand(pm *PackageManager, command string, args []string) error {
 	return cmd.Run()
 }
 
-// RequireSudo checks if the command requires sudo privileges
+// RequireSudo checks if a command requires sudo privileges
 func RequireSudo(command string) bool {
-	// Commands that typically require sudo/root privileges on Linux systems
+	// On macOS, Homebrew doesn't use sudo
+	if runtime.GOOS == "darwin" {
+		return false
+	}
+
+	// Commands that require sudo on Linux
 	sudoCommands := map[string]bool{
 		"install":      true,
 		"reinstall":    true,
 		"remove":       true,
-		"update":       true, // Added update which often requires root
+		"update":       true,
 		"upgrade":      true,
 		"autoremove":   true,
 		"clean":        true,
-		"add-key":      true, // Adding repository keys requires root
-		"add-repo":     true, // Adding repositories requires root
-		"enable-repo":  true, // Enabling repositories requires root
-		"disable-repo": true, // Disabling repositories requires root
+		"add-key":      true,
+		"add-repo":     true,
+		"enable-repo":  true,
+		"disable-repo": true,
+		"list-repos":   true,
 	}
 
 	return sudoCommands[command]
@@ -175,34 +181,12 @@ func RunWithSudo(pm *PackageManager, command string, args []string) error {
 	return ExecuteCommand(pm, command, args)
 }
 
-// ExecuteShellCommand runs a shell command directly
-func ExecuteShellCommand(command string, requireSudo bool) error {
-	var cmd *exec.Cmd
-
-	if requireSudo && IsLinux() && os.Geteuid() != 0 {
-		fmt.Printf("This command requires root privileges. Executing with sudo...\n")
-
-		// Check if sudo is available
-		_, err := exec.LookPath("sudo")
-		if err != nil {
-			return fmt.Errorf("this command requires root privileges, but sudo is not available: %v", err)
-		}
-
-		// Add -S flag to sudo if in non-interactive mode
-		sudoCmd := "sudo"
-		if IsYesMode() {
-			sudoCmd = "sudo -S"
-		}
-
-		fmt.Printf("Executing: %s %s\n", sudoCmd, command)
-		cmd = exec.Command("sh", "-c", sudoCmd+" "+command)
-	} else {
-		fmt.Printf("Executing: %s\n", command)
-		cmd = exec.Command("sh", "-c", command)
+// ExecuteCommandWithOutput executes a command and returns its output
+func ExecuteCommandWithOutput(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to execute command: %v: %s", err, output)
 	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
+	return string(output), nil
 }

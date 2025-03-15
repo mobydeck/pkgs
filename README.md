@@ -76,6 +76,8 @@ just package
 
 ### Basic Commands
 
+These commands handle the package manager-specific details, making it easier to manage packages across different systems:
+
 ```bash
 # Install packages
 pkgs install nginx
@@ -101,7 +103,7 @@ pkgs show vim
 pkgs update
 pkgs up
 
-# Upgrade installed packages
+# Upgrade all packages
 pkgs upgrade
 pkgs ug
 
@@ -110,18 +112,6 @@ pkgs autoremove
 
 # Clean package cache
 pkgs clean
-
-# Add repository keys
-pkgs add-key nodesource https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-
-# Add repositories
-pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
-
-# Enable a repository
-pkgs enable-repo docker-ce
-
-# Disable a repository
-pkgs disable-repo docker-ce
 
 # Show which package manager is being used
 pkgs which
@@ -140,7 +130,68 @@ elif [ "$PM" = "brew" ]; then
 fi
 ```
 
-### Help
+## Repository Management
+
+These commands handle the package manager-specific details, making it easier to manage repositories across different systems:
+
+```bash
+# Add a repository key
+pkgs add-key [name] url
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs add-key nodesource https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+
+# For Alpine Linux
+pkgs add-key alpine-key https://alpine-keys.example.com/key.rsa.pub
+
+# Add a repository
+pkgs add-repo [name] url
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
+
+# For dnf/yum-based systems (Fedora/RHEL/CentOS)
+pkgs add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+
+# For Alpine Linux
+pkgs add-repo edge-testing https://dl-cdn.alpinelinux.org/alpine/edge/testing
+
+# For Homebrew
+pkgs add-repo homebrew/cask-fonts
+
+# Enable a repository
+pkgs enable-repo name
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs enable-repo nodesource
+
+# For dnf/yum-based systems
+pkgs enable-repo docker-ce
+
+# For Alpine Linux
+pkgs enable-repo edge-testing
+
+# Disable a repository
+pkgs disable-repo name
+
+# Examples:
+# For apt-based systems (Debian/Ubuntu)
+pkgs disable-repo nodesource
+
+# For dnf/yum-based systems
+pkgs disable-repo docker-ce
+
+# For Alpine Linux
+pkgs disable-repo edge-testing
+
+# List all repositories with their status (enabled/disabled)
+pkgs list-repos
+```
+
+## Help and Version
 
 ```bash
 # Show general help
@@ -148,20 +199,12 @@ pkgs --help
 
 # Show command-specific help
 pkgs install --help
-```
 
-### Version
-
-```bash
 # Show version information
 pkgs --version
-
-# Run commands non-interactively (useful for CI/CD and automation)
-pkgs --yes install nginx
-pkgs -y update
 ```
 
-### Non-Interactive Mode
+## Non-Interactive Mode
 
 For CI/CD pipelines and automation scripts, you can use the `--yes` or `-y` flag to run commands non-interactively:
 
@@ -200,74 +243,6 @@ The `PKGS_YES` environment variable accepts the following values (case-insensiti
 - `true`, `yes`, `1`, `y`: Enable non-interactive mode
 - Any other value or unset: Use the default interactive mode
 
-### Repository Management
-
-`pkgs` provides commands to manage package repositories and their signing keys:
-
-```bash
-# Add a repository key
-pkgs add-key [name] url
-
-# Examples:
-# For apt-based systems (Debian/Ubuntu)
-pkgs add-key nodesource https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-
-# For Alpine Linux
-pkgs add-key alpine-key https://alpine-keys.example.com/key.rsa.pub
-# Or without specifying a name (will use the filename from the URL)
-pkgs add-key https://alpine-keys.example.com/key.rsa.pub
-```
-
-```bash
-# Add a repository
-pkgs add-repo [name] url
-
-# Examples:
-# For apt-based systems (Debian/Ubuntu)
-pkgs add-repo nodesource "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main"
-
-# For dnf/yum-based systems (Fedora/RHEL/CentOS)
-pkgs add-repo https://download.docker.com/linux/fedora/docker-ce.repo
-
-# For Alpine Linux
-pkgs add-repo edge-testing https://dl-cdn.alpinelinux.org/alpine/edge/testing
-
-# For Homebrew
-pkgs add-repo homebrew/cask-fonts
-```
-
-```bash
-# Enable a repository
-pkgs enable-repo name
-
-# Examples:
-# For apt-based systems (Debian/Ubuntu)
-pkgs enable-repo nodesource
-
-# For dnf/yum-based systems
-pkgs enable-repo docker-ce
-
-# For Alpine Linux
-pkgs enable-repo edge-testing
-```
-
-```bash
-# Disable a repository
-pkgs disable-repo name
-
-# Examples:
-# For apt-based systems (Debian/Ubuntu)
-pkgs disable-repo nodesource
-
-# For dnf/yum-based systems
-pkgs disable-repo docker-ce
-
-# For Alpine Linux
-pkgs disable-repo edge-testing
-```
-
-These commands handle the package manager-specific details for you, making it easier to manage repositories across different systems.
-
 ## Package Manager Specifics
 
 ### Homebrew (macOS)
@@ -280,6 +255,7 @@ On macOS systems, `pkgs` automatically detects and uses Homebrew. Some key diffe
 - `reinstall` uses `brew reinstall` to reinstall packages
 - `add-repo` uses `brew tap` to add new taps
 - `add-key` is not applicable for Homebrew
+- `list-repos` shows all taps
 
 ### Linux Package Managers
 
@@ -292,6 +268,7 @@ Each Linux package manager has its own specific implementation:
   - `add-repo` creates files in `/etc/apt/sources.list.d/name.list`
   - `enable-repo` uncomments entries in repository files
   - `disable-repo` comments out entries in repository files
+  - `list-repos` shows repositories from `/etc/apt/sources.list` and `/etc/apt/sources.list.d/`
 - `dnf`/`yum` (RedHat): 
   - Uses `check-update` for the update command
   - Has a dedicated `reinstall` command
@@ -299,6 +276,7 @@ Each Linux package manager has its own specific implementation:
   - `add-key` provides guidance for using `rpm --import`
   - `enable-repo` sets `enabled=1` in repository files
   - `disable-repo` sets `enabled=0` in repository files
+  - `list-repos` shows repositories from `/etc/yum.repos.d/`
 - `apk` (Alpine): 
   - Uses `add` and `del` instead of install/remove
   - Uses `add --force-overwrite` for reinstalling
@@ -306,12 +284,14 @@ Each Linux package manager has its own specific implementation:
   - `add-repo` adds repositories to `/etc/apk/repositories`
   - `enable-repo` uncomments repository entries
   - `disable-repo` comments out repository entries
+  - `list-repos` shows repositories from `/etc/apk/repositories`
 - `pacman` (Arch): 
   - Uses special flags like `-S`, `-Rns`, etc.
   - Uses `-S --needed` for reinstalling packages
   - `add-key` provides guidance for using `pacman-key --add`
   - `add-repo` provides guidance for manually editing `/etc/pacman.conf`
   - `enable-repo` and `disable-repo` provide guidance for manually editing `/etc/pacman.conf`
+  - `list-repos` shows repositories from `/etc/pacman.conf`
 
 #### Privilege Elevation on Linux
 
@@ -333,6 +313,7 @@ Commands that require privilege elevation:
 - add-repo
 - enable-repo
 - disable-repo
+- list-repos
 
 ## License
 

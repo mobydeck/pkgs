@@ -34,6 +34,7 @@ func DetectPackageManager() *PackageManager {
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
@@ -47,22 +48,48 @@ func DetectPackageManager() *PackageManager {
 			Commands: map[string][]string{
 				"install":      {"install"},
 				"reinstall":    {"install", "--reinstall"},
-				"remove":       {"remove", "--purge"},
+				"remove":       {"remove"},
 				"update":       {"update"},
 				"upgrade":      {"upgrade"},
 				"search":       {"search"},
 				"info":         {"show"},
-				"autoremove":   {"autoremove", "--purge"},
+				"autoremove":   {"autoremove"},
 				"clean":        {"clean"},
 				"add-repo":     {""},
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
 
-	// Check for dnf (Fedora/RHEL 8+)
+	// Check for apt-get (older Debian/Ubuntu)
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		return &PackageManager{
+			Name: "apt-get",
+			Bin:  "apt-get",
+			Type: "debian",
+			Commands: map[string][]string{
+				"install":      {"install"},
+				"reinstall":    {"install", "--reinstall"},
+				"remove":       {"remove"},
+				"update":       {"update"},
+				"upgrade":      {"upgrade"},
+				"search":       {"search"},
+				"info":         {"show"},
+				"autoremove":   {"autoremove"},
+				"clean":        {"clean"},
+				"add-repo":     {""},
+				"add-key":      {""},
+				"enable-repo":  {""},
+				"disable-repo": {""},
+				"list-repos":   {""},
+			},
+		}
+	}
+
+	// Check for dnf (Fedora/RHEL/CentOS)
 	if _, err := exec.LookPath("dnf"); err == nil {
 		return &PackageManager{
 			Name: "dnf",
@@ -82,11 +109,12 @@ func DetectPackageManager() *PackageManager {
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
 
-	// Check for yum (CentOS/RHEL 7 and earlier)
+	// Check for yum (older Fedora/RHEL/CentOS)
 	if _, err := exec.LookPath("yum"); err == nil {
 		return &PackageManager{
 			Name: "yum",
@@ -106,11 +134,12 @@ func DetectPackageManager() *PackageManager {
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
 
-	// Check for apk (Alpine)
+	// Check for apk (Alpine Linux)
 	if _, err := exec.LookPath("apk"); err == nil {
 		return &PackageManager{
 			Name: "apk",
@@ -130,11 +159,12 @@ func DetectPackageManager() *PackageManager {
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
 
-	// Check for pacman (Arch)
+	// Check for pacman (Arch Linux)
 	if _, err := exec.LookPath("pacman"); err == nil {
 		return &PackageManager{
 			Name: "pacman",
@@ -143,21 +173,21 @@ func DetectPackageManager() *PackageManager {
 			Commands: map[string][]string{
 				"install":      {"-S"},
 				"reinstall":    {"-S", "--needed"},
-				"remove":       {"-Rns"},
+				"remove":       {"-R"},
 				"update":       {"-Sy"},
 				"upgrade":      {"-Syu"},
 				"search":       {"-Ss"},
-				"info":         {"-Si"},
-				"autoremove":   {"-Rns", "$(pacman -Qdtq)"},
+				"info":         {"-Qi"},
+				"autoremove":   {"-Rs", "$(pacman -Qdtq)"},
 				"clean":        {"-Sc"},
 				"add-repo":     {""},
 				"add-key":      {""},
 				"enable-repo":  {""},
 				"disable-repo": {""},
+				"list-repos":   {""},
 			},
 		}
 	}
 
-	// Default to nil if no package manager is found
 	return nil
 }
