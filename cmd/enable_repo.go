@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -121,85 +120,32 @@ func enableRepoApt(name string) error {
 func enableRepoDnfYum(name string) error {
 	config := getRepoConfig("redhat")
 
-	// Find the repository file
-	repoFiles, err := filepath.Glob(filepath.Join(config.baseDir, "*.repo"))
+	repoFile, found, err := findRepoFile(config.baseDir, config.fileExtension, name)
 	if err != nil {
-		return fmt.Errorf("failed to list repository files: %v", err)
+		return err
 	}
 
-	// Try exact match first (repository ID)
-	exactMatch := false
-	for _, repoFile := range repoFiles {
-		content, err := readFileContent(repoFile)
-		if err != nil {
-			return err
-		}
-
-		// Check for exact repository ID match
-		repoIDPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(name) + `\]`)
-		if repoIDPattern.MatchString(content) {
-			exactMatch = true
-
-			// Check if already enabled
-			repoSection := extractRepoSection(content, name)
-			if strings.Contains(repoSection, "enabled=1") {
-				fmt.Printf("Repository %s is already enabled in %s\n", name, repoFile)
-				return nil
-			}
-
-			// Modify the file to enable the repository
-			modifiedContent := enableRepoInContent(content, name)
-			if err := writeFileContent(repoFile, modifiedContent, 0644); err != nil {
-				return err
-			}
-
-			fmt.Printf("Successfully enabled repository %s in %s\n", name, repoFile)
-			fmt.Println("Run 'pkgs update' to update the package lists.")
-			return nil
-		}
+	if !found {
+		return fmt.Errorf("no repository with ID '%s' found in %s", name, config.baseDir)
 	}
 
-	// If no exact match found, try to find by name in repo files
-	if !exactMatch {
-		nameMatched := false
-		for _, repoFile := range repoFiles {
-			content, err := readFileContent(repoFile)
-			if err != nil {
-				return err
-			}
-
-			// Find all repository sections
-			repoSections := extractAllRepoSections(content)
-			for repoID, repoSection := range repoSections {
-				// Check if this section has a name that matches
-				if strings.Contains(repoSection, "name="+name) ||
-					strings.Contains(repoSection, "name = "+name) {
-					nameMatched = true
-
-					// Check if already enabled
-					if strings.Contains(repoSection, "enabled=1") {
-						fmt.Printf("Repository with name %s (ID: %s) is already enabled in %s\n", name, repoID, repoFile)
-						return nil
-					}
-
-					// Modify the file to enable the repository
-					modifiedContent := enableRepoInContent(content, repoID)
-					if err := writeFileContent(repoFile, modifiedContent, 0644); err != nil {
-						return err
-					}
-
-					fmt.Printf("Successfully enabled repository with name %s (ID: %s) in %s\n", name, repoID, repoFile)
-					fmt.Println("Run 'pkgs update' to update the package lists.")
-					return nil
-				}
-			}
-		}
-
-		if !nameMatched {
-			return fmt.Errorf("repository %s not found in any .repo file", name)
-		}
+	content, err := readFileContent(repoFile)
+	if err != nil {
+		return err
 	}
 
+	newContent := setRepoEnabled(content, name, true)
+	if newContent == content {
+		fmt.Printf("Repository '%s' is already enabled\n", name)
+		return nil
+	}
+
+	if err := writeFileContent(repoFile, newContent, 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully enabled repository '%s' in %s\n", name, repoFile)
+	fmt.Println("Run 'pkgs update' to update the package lists.")
 	return nil
 }
 
@@ -248,27 +194,6 @@ func enableRepoAlpine(name string) error {
 	fmt.Printf("Successfully enabled repository %s\n", name)
 	fmt.Println("Run 'pkgs update' to update the package lists.")
 	return nil
-}
-
-// Helper function to enable a repository in content
-func enableRepoInContent(content, repoID string) string {
-	// Find the repository section
-	repoSection := extractRepoSection(content, repoID)
-	if repoSection == "" {
-		return content
-	}
-
-	// Check if enabled=0 exists
-	enabledPattern := regexp.MustCompile(`(?m)(^|\n)\s*enabled\s*=\s*0`)
-	if enabledPattern.MatchString(repoSection) {
-		// Replace enabled=0 with enabled=1
-		modifiedSection := enabledPattern.ReplaceAllString(repoSection, "${1}enabled=1")
-		return strings.Replace(content, repoSection, modifiedSection, 1)
-	}
-
-	// If no enabled=0 exists, add enabled=1 after the repository header
-	repoHeaderPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(repoID) + `\].*?(\n)`)
-	return repoHeaderPattern.ReplaceAllString(content, "${0}enabled=1\n")
 }
 
 func init() {

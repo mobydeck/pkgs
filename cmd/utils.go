@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -42,18 +43,6 @@ func getRepoConfig(pmType string) repoConfig {
 	default:
 		return repoConfig{}
 	}
-}
-
-// Helper function to extract a repository section from content
-func extractRepoSection(content, repoID string) string {
-	repoIDPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(repoID) + `\].*?($|\[)`)
-	match := repoIDPattern.FindString(content)
-	if match == "" {
-		return ""
-	}
-
-	// Remove the next repository section marker if present
-	return strings.TrimSuffix(match, "[")
 }
 
 // Helper function to extract all repository sections
@@ -156,4 +145,90 @@ func downloadFile(url, filepath string) error {
 	}
 
 	return nil
+}
+
+// setRepoEnabled modifies content to set a repository's enabled status (1 or 0)
+func setRepoEnabled(content, repoID string, enable bool) string {
+	lines := strings.Split(content, "\n")
+	result := make([]string, 0, len(lines))
+	inRepo := false
+	enabledFound := false
+	enabledValue := "0"
+	if enable {
+		enabledValue = "1"
+	}
+
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+
+		// Check if we're entering the target repo section
+		if trimmedLine == "["+repoID+"]" {
+			inRepo = true
+			result = append(result, line)
+			continue
+		}
+
+		// Check if we're exiting the current repo section
+		if inRepo && strings.HasPrefix(trimmedLine, "[") && trimmedLine != "["+repoID+"]" {
+			// If we went through the section without finding an enabled key, add it before leaving
+			if !enabledFound {
+				result = append(result, "enabled="+enabledValue)
+			}
+			inRepo = false
+			result = append(result, line)
+			continue
+		}
+
+		// Handle lines within the target repo section
+		if inRepo {
+			// Skip any enabled= line we find after already processing one
+			if strings.HasPrefix(trimmedLine, "enabled=") {
+				if !enabledFound {
+					// This is the first enabled= line we've found, replace it
+					result = append(result, "enabled="+enabledValue)
+					enabledFound = true
+				}
+				// Skip this line (don't add it to result) if it's a duplicate
+			} else {
+				// Keep all other lines within the section
+				result = append(result, line)
+			}
+		} else {
+			// Not in our target repo section, keep all lines
+			result = append(result, line)
+		}
+	}
+
+	// If we reached the end of the file while still in the repo section and haven't found an enabled key
+	if inRepo && !enabledFound {
+		result = append(result, "enabled="+enabledValue)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// findRepoFile searches for repository files containing a specific repo ID
+// Returns the file path of the matching repo and whether an exact match was found
+func findRepoFile(baseDir, fileExt, repoID string) (string, bool, error) {
+	repoFiles, err := filepath.Glob(filepath.Join(baseDir, "*"+fileExt))
+	if err != nil {
+		return "", false, fmt.Errorf("failed to list repository files: %v", err)
+	}
+
+	// Try exact match first (repository ID)
+	for _, repoFile := range repoFiles {
+		content, err := readFileContent(repoFile)
+		if err != nil {
+			continue
+		}
+
+		// Check for exact repository ID match
+		repoIDPattern := regexp.MustCompile(`(?m)^\[` + regexp.QuoteMeta(repoID) + `\]`)
+		if repoIDPattern.MatchString(content) {
+			return repoFile, true, nil
+		}
+	}
+
+	// No exact match found
+	return "", false, nil
 }

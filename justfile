@@ -106,3 +106,54 @@ test:
 install: build
     @echo "Installing to /usr/local/bin/{{prog}}..."
     sudo cp {{prog}} /usr/local/bin/
+
+# Create a GitHub release and upload distribution files
+release: package
+    #!/bin/sh -e
+    echo "Creating GitHub release for version {{version}}..."
+    if [ "$(git status --porcelain)" != "" ]; then \
+        echo "Error: Working directory is not clean. Commit or stash changes before creating a release."; \
+        exit 1; \
+    fi
+    if [ "$(git branch --show-current)" != "main" ] && [ "$(git branch --show-current)" != "master" ]; then \
+        echo "Warning: You are not on main/master branch. Continue? [y/N]"; \
+        read -r answer; \
+        if [ "$answer" != "y" ] && [ "$answer" != "Y" ]; then \
+            echo "Release cancelled."; \
+            exit 1; \
+        fi; \
+    fi
+    echo "Checking for GitHub token..."
+    if [ -z "$GH_TOKEN" ]; then \
+        echo "GH_TOKEN not set, attempting to extract from .netrc file..."; \
+        if [ ! -f ~/.netrc ]; then \
+            echo "Error: ~/.netrc file not found and GH_TOKEN not set."; \
+            echo "Please set GH_TOKEN environment variable or create .netrc with GitHub credentials."; \
+            exit 1; \
+        fi; \
+        GITHUB_TOKEN=$(grep "machine github.com" ~/.netrc | grep "password" | awk '{print $6}') && \
+        if [ -z "$GITHUB_TOKEN" ]; then \
+            echo "Error: GitHub token not found in .netrc file."; \
+            echo "Please ensure your .netrc contains a 'machine github.com' entry with a password or set GH_TOKEN."; \
+            exit 1; \
+        fi; \
+        export GH_TOKEN="$GITHUB_TOKEN"; \
+        echo "GitHub token extracted successfully."; \
+    else \
+        echo "Using existing GH_TOKEN environment variable."; \
+    fi
+    echo "Finding archive files in dist folder..."
+    FILES=$(find dist -type f -name "*.tar.gz" -o -name "*.zip" | tr '\n' ' ') && \
+    if [ -z "$FILES" ]; then \
+        echo "Error: No archive files found in dist folder"; \
+        exit 1; \
+    else \
+        echo "Found archive files: $FILES"; \
+        gh release create {{version}} \
+            --title "Release {{version}}" \
+            --notes "Release {{version}}" \
+            --draft \
+            $FILES; \
+    fi
+    echo "✓ Created draft release {{version}} on GitHub"
+    echo "Review and publish the release at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases"
