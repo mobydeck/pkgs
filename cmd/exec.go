@@ -105,15 +105,17 @@ func ExecuteCommand(pm *PackageManager, command string, args []string) error {
 func RequireSudo(command string) bool {
 	// Commands that typically require sudo/root privileges on Linux systems
 	sudoCommands := map[string]bool{
-		"install":    true,
-		"reinstall":  true,
-		"remove":     true,
-		"update":     true, // Added update which often requires root
-		"upgrade":    true,
-		"autoremove": true,
-		"clean":      true,
-		"add-key":    true, // Adding repository keys requires root
-		"add-repo":   true, // Adding repositories requires root
+		"install":      true,
+		"reinstall":    true,
+		"remove":       true,
+		"update":       true, // Added update which often requires root
+		"upgrade":      true,
+		"autoremove":   true,
+		"clean":        true,
+		"add-key":      true, // Adding repository keys requires root
+		"add-repo":     true, // Adding repositories requires root
+		"enable-repo":  true, // Enabling repositories requires root
+		"disable-repo": true, // Disabling repositories requires root
 	}
 
 	return sudoCommands[command]
