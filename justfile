@@ -8,7 +8,7 @@ default:
     @just --list
 
 # Build flags with version information
-build_flags := "-ldflags='-s -w -X {{prog}}/cmd.version=" + version + "' -trimpath"
+build_flags := "-ldflags='-s -w -X " + prog + "/cmd.version=" + version + "' -trimpath"
 
 # Show current version
 version:
