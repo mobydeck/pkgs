@@ -23,7 +23,7 @@ var reinstallCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Using package manager: %s\n", pm.Name)
-		if err := RunWithSudo(pm, "reinstall", args); err != nil {
+		if err := ExecuteCommand(pm, "reinstall", args); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
 	},

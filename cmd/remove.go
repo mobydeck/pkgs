@@ -23,7 +23,7 @@ var removeCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Using package manager: %s\n", pm.Name)
-		if err := RunWithSudo(pm, "remove", args); err != nil {
+		if err := ExecuteCommand(pm, "remove", args); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
 	},

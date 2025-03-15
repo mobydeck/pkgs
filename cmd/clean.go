@@ -20,7 +20,7 @@ var cleanCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Using package manager: %s\n", pm.Name)
-		if err := RunWithSudo(pm, "clean", args); err != nil {
+		if err := ExecuteCommand(pm, "clean", args); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
 	},

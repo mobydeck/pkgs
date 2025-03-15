@@ -37,46 +37,36 @@ For Alpine Linux:
 			return
 		}
 
-		// Check arguments based on package manager
+		// Check arguments
+		if len(args) != 2 {
+			fmt.Println("Error: Repository name and URL are required.")
+			fmt.Println("Usage: pkgs add-key name url")
+			return
+		}
+		name := args[0]
+		url := args[1]
+
+		// Add key based on package manager
 		switch pm.Type {
 		case "debian":
-			if len(args) != 2 {
-				fmt.Println("Error: For apt-based systems, both name and URL are required.")
-				fmt.Println("Usage: pkgs add-key name url")
-				return
-			}
-			name := args[0]
-			url := args[1]
 			if err := addKeyApt(name, url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
+		case "redhat":
+			fmt.Println("For dnf/yum-based systems, keys are typically added with the repository.")
+			fmt.Println("Use 'pkgs add-repo' with the appropriate GPG key URL.")
 		case "alpine":
-			if len(args) == 0 || len(args) > 2 {
-				fmt.Println("Error: For Alpine Linux, provide URL or name and URL.")
-				fmt.Println("Usage: pkgs add-key [name] url")
-				return
-			}
-			var name, url string
-			if len(args) == 1 {
-				url = args[0]
-				name = ""
-			} else {
-				name = args[0]
-				url = args[1]
-			}
 			if err := addKeyAlpine(name, url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
-		case "redhat":
-			fmt.Println("Adding repository keys is not directly supported for yum/dnf.")
-			fmt.Println("You can use 'rpm --import <key_url>' to import a key.")
 		case "arch":
-			fmt.Println("Adding repository keys is not directly supported for pacman.")
-			fmt.Println("You can use 'pacman-key --add <keyfile>' to add a key.")
+			fmt.Println("For Arch Linux, keys are typically added with 'pacman-key --recv-keys' and 'pacman-key --lsign-key'.")
+			fmt.Println("Please refer to the Arch Linux documentation for adding keys.")
 		case "macos":
-			fmt.Println("Adding repository keys is not applicable for Homebrew.")
+			fmt.Println("For Homebrew, keys are managed automatically when adding taps.")
+			fmt.Println("Use 'brew tap' to add a repository.")
 		default:
-			fmt.Println("Adding repository keys is not supported for this package manager.")
+			fmt.Println("Adding keys is not supported for this package manager.")
 		}
 	},
 }

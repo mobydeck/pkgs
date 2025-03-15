@@ -44,51 +44,33 @@ For Alpine Linux:
 			return
 		}
 
-		// Check arguments based on package manager
+		// Check arguments
+		if len(args) != 2 {
+			fmt.Println("Error: Repository name and URL are required.")
+			fmt.Println("Usage: pkgs add-repo name url")
+			return
+		}
+		name := args[0]
+		url := args[1]
+
+		// Add repository based on package manager
 		switch pm.Type {
 		case "debian":
-			if len(args) != 2 {
-				fmt.Println("Error: For apt-based systems, both name and repository line are required.")
-				fmt.Println("Usage: pkgs add-repo name \"repository-line\"")
-				return
-			}
-			name := args[0]
-			repoLine := args[1]
-			if err := addRepoApt(name, repoLine); err != nil {
+			if err := addRepoApt(name, url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
 		case "redhat":
-			if len(args) != 1 {
-				fmt.Println("Error: For dnf/yum-based systems, only the repository URL is required.")
-				fmt.Println("Usage: pkgs add-repo url")
-				return
-			}
-			url := args[0]
-			if err := addRepoDnfYum(pm, url); err != nil {
+			if err := addRepoDnfYum(name, url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
 		case "alpine":
-			if len(args) != 2 {
-				fmt.Println("Error: For Alpine Linux, both name and URL are required.")
-				fmt.Println("Usage: pkgs add-repo name url")
-				return
-			}
-			name := args[0]
-			url := args[1]
 			if err := addRepoAlpine(name, url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
 		case "arch":
 			fmt.Println("For Arch Linux, you need to manually edit /etc/pacman.conf to add repositories.")
-			fmt.Println("Alternatively, you can use the Arch User Repository (AUR) for additional packages.")
 		case "macos":
-			if len(args) != 1 {
-				fmt.Println("Error: For Homebrew, only the tap name is required.")
-				fmt.Println("Usage: pkgs add-repo tap-name")
-				return
-			}
-			tap := args[0]
-			if err := addRepoHomebrew(tap); err != nil {
+			if err := addRepoHomebrew(url); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
 		default:
@@ -117,60 +99,42 @@ func addRepoApt(name, repoLine string) error {
 }
 
 // addRepoDnfYum adds a repository for dnf/yum-based systems
-func addRepoDnfYum(pm *PackageManager, url string) error {
-	// Check if the URL is a remote file or a local file
-	isRemoteFile := strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "ftp://")
-
-	// For remote .repo files, download them to the yum.repos.d directory
-	if isRemoteFile && strings.HasSuffix(url, ".repo") {
-		// Create the repos directory if it doesn't exist
-		reposDir := "/etc/yum.repos.d"
-		if err := os.MkdirAll(reposDir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %v", reposDir, err)
+func addRepoDnfYum(name, url string) error {
+	// Check if the URL is a direct .repo file URL
+	if strings.HasSuffix(url, ".repo") {
+		// Create yum.repos.d directory if it doesn't exist
+		repoDir := "/etc/yum.repos.d"
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %v", repoDir, err)
 		}
 
-		// Extract the filename from the URL
-		filename := filepath.Base(url)
-		repoPath := filepath.Join(reposDir, filename)
+		// Download the .repo file
+		repoPath := filepath.Join(repoDir, name+".repo")
+		fmt.Printf("Downloading repository file from %s to %s...\n", url, repoPath)
 
-		// Download the repo file
 		if err := downloadFile(url, repoPath); err != nil {
 			return fmt.Errorf("failed to download repository file: %v", err)
 		}
 
 		fmt.Printf("Successfully added repository to %s\n", repoPath)
 	} else {
-		// For non-repo URLs or local files, create a new .repo file
-		reposDir := "/etc/yum.repos.d"
-		if err := os.MkdirAll(reposDir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %v", reposDir, err)
+		// Create a .repo file with the provided URL
+		repoDir := "/etc/yum.repos.d"
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %v", repoDir, err)
 		}
 
-		// Generate a repo name from the URL
-		repoName := "pkgs-" + strings.ReplaceAll(
-			strings.ReplaceAll(
-				strings.ReplaceAll(
-					strings.ReplaceAll(url, "http://", ""),
-					"https://", ""),
-				"/", "-"),
-			".", "-")
+		// Create the repository file content
+		content := fmt.Sprintf("[%s]\nname=%s\nbaseurl=%s\nenabled=1\ngpgcheck=0\n", name, name, url)
 
-		// Ensure the repo name is not too long
-		if len(repoName) > 50 {
-			repoName = repoName[:50]
-		}
-
-		// Create the repo file content
-		repoContent := fmt.Sprintf("[%s]\nname=%s\nbaseurl=%s\nenabled=1\ngpgcheck=0\n",
-			repoName, repoName, url)
-
-		// Write the repo file
-		repoPath := filepath.Join(reposDir, repoName+".repo")
-		if err := os.WriteFile(repoPath, []byte(repoContent), 0644); err != nil {
+		// Write the repository file
+		repoPath := filepath.Join(repoDir, name+".repo")
+		if err := os.WriteFile(repoPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write repository file: %v", err)
 		}
 
 		fmt.Printf("Successfully added repository to %s\n", repoPath)
+		fmt.Println("Note: GPG check is disabled. To enable it, add the GPG key and edit the repo file.")
 	}
 
 	fmt.Println("Run 'pkgs update' to update the package lists.")
