@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -284,13 +286,21 @@ func listReposHomebrew() error {
 	fmt.Println("Homebrew Taps:")
 	fmt.Println("==============")
 
-	// Execute brew tap command
-	output, err := ExecuteCommandWithOutput("brew", "tap")
+	// Create a temporary buffer to capture output
+	var outBuf bytes.Buffer
+
+	// Create brew command
+	cmd := exec.Command("brew", "tap")
+	cmd.Stdout = &outBuf
+
+	// Run command
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to list Homebrew taps: %v", err)
 	}
 
 	// Display taps
+	output := outBuf.String()
 	taps := strings.Split(strings.TrimSpace(output), "\n")
 	for _, tap := range taps {
 		if tap != "" {
