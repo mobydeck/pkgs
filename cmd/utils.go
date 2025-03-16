@@ -45,9 +45,14 @@ func getRepoConfig(pmType string) repoConfig {
 	}
 }
 
+type repoSection struct {
+	id      string
+	content string
+}
+
 // Helper function to extract all repository sections
-func extractAllRepoSections(content string) map[string]string {
-	repoSections := make(map[string]string)
+func extractAllRepoSections(content string) []repoSection {
+	var repoSections []repoSection
 
 	// Find all repository section headers
 	repoHeaderPattern := regexp.MustCompile(`(?m)^\[(.*?)]`)
@@ -64,7 +69,10 @@ func extractAllRepoSections(content string) map[string]string {
 
 		// Extract the section content
 		sectionContent := content[match[0]:sectionEnd]
-		repoSections[repoID] = sectionContent
+		repoSections = append(repoSections, repoSection{
+			id:      repoID,
+			content: sectionContent,
+		})
 	}
 
 	return repoSections

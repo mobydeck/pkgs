@@ -171,27 +171,27 @@ func listReposDnfYum() error {
 			continue
 		}
 
-		fmt.Printf("\nFrom %s:\n", file)
+		fmt.Printf("\nFrom %s\n", file)
 
 		// Extract all repository sections
 		repoSections := extractAllRepoSections(string(content))
 
-		for repoID, repoSection := range repoSections {
+		for _, section := range repoSections {
 			// Extract name if available
 			namePattern := regexp.MustCompile(`(?m)^name\s*=\s*(.*)$`)
-			nameMatch := namePattern.FindStringSubmatch(repoSection)
-			repoName := repoID
+			nameMatch := namePattern.FindStringSubmatch(section.content)
+			repoName := section.id
 			if len(nameMatch) > 1 {
-				repoName = fmt.Sprintf("%s (%s)", nameMatch[1], repoID)
+				repoName = fmt.Sprintf("%s (%s)", nameMatch[1], section.id)
 			}
 
 			// Check if enabled
 			status := "Unknown"
 			statusColor := colorGrey
-			if strings.Contains(repoSection, "enabled=0") {
+			if strings.Contains(section.content, "enabled=0") {
 				status = "Disabled"
 				statusColor = colorYellow
-			} else if strings.Contains(repoSection, "enabled=1") {
+			} else if strings.Contains(section.content, "enabled=1") {
 				status = "Enabled"
 				statusColor = colorGreen
 			} else {
