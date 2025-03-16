@@ -88,14 +88,16 @@ func listReposApt() error {
 			}
 
 			status := "Enabled"
+			statusColor := colorGreen
 			if strings.HasPrefix(line, "#") {
 				status = "Disabled"
+				statusColor = colorYellow
 				// Remove comment for display
 				line = strings.TrimPrefix(strings.TrimPrefix(line, "# "), "#")
 			}
 
 			if strings.HasPrefix(line, "deb ") || strings.HasPrefix(line, "deb-src ") {
-				fmt.Printf("  [%s] %s\n", status, line)
+				fmt.Printf("  [%s] %s\n", colorize(status, statusColor), line)
 			}
 		}
 	}
@@ -124,14 +126,16 @@ func listReposApt() error {
 				}
 
 				status := "Enabled"
+				statusColor := colorGreen
 				if strings.HasPrefix(line, "#") {
 					status = "Disabled"
+					statusColor = colorYellow
 					// Remove comment for display
 					line = strings.TrimPrefix(strings.TrimPrefix(line, "# "), "#")
 				}
 
 				if strings.HasPrefix(line, "deb ") || strings.HasPrefix(line, "deb-src ") {
-					fmt.Printf("  [%s] %s\n", status, line)
+					fmt.Printf("  [%s] %s\n", colorize(status, statusColor), line)
 				}
 			}
 		}
@@ -183,16 +187,20 @@ func listReposDnfYum() error {
 
 			// Check if enabled
 			status := "Unknown"
+			statusColor := colorGrey
 			if strings.Contains(repoSection, "enabled=0") {
 				status = "Disabled"
+				statusColor = colorYellow
 			} else if strings.Contains(repoSection, "enabled=1") {
 				status = "Enabled"
+				statusColor = colorGreen
 			} else {
 				// Default is enabled if not specified
 				status = "Enabled (default)"
+				statusColor = colorGreen
 			}
 
-			fmt.Printf("  [%s] %s\n", status, repoName)
+			fmt.Printf("  [%s] %s\n", colorize(status, statusColor), repoName)
 		}
 	}
 
@@ -222,13 +230,15 @@ func listReposAlpine() error {
 		}
 
 		status := "Enabled"
+		statusColor := colorGreen
 		if strings.HasPrefix(line, "#") {
 			status = "Disabled"
+			statusColor = colorYellow
 			// Remove comment for display
 			line = strings.TrimPrefix(strings.TrimPrefix(line, "# "), "#")
 		}
 
-		fmt.Printf("  [%s] %s\n", status, line)
+		fmt.Printf("  [%s] %s\n", colorize(status, statusColor), line)
 	}
 
 	return nil
@@ -267,7 +277,8 @@ func listReposPacman() error {
 			if repoName != "options" {
 				inRepo = true
 				status := "Enabled"
-				fmt.Printf("  [%s] %s\n", status, repoName)
+				statusColor := colorGreen
+				fmt.Printf("  [%s] %s\n", colorize(status, statusColor), repoName)
 			} else {
 				inRepo = false
 			}
@@ -304,7 +315,8 @@ func listReposHomebrew() error {
 	taps := strings.Split(strings.TrimSpace(output), "\n")
 	for _, tap := range taps {
 		if tap != "" {
-			fmt.Printf("  [Enabled] %s\n", tap)
+			statusColor := colorGreen
+			fmt.Printf("  [%s] %s\n", colorize("Enabled", statusColor), tap)
 		}
 	}
 
